@@ -1,7 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 
+
 function App() {
+  // Load existing collections from the backend when the app starts
+  useEffect(() => {
+    const loadCollections = async () => {
+      const response = await fetch('http://localhost:3001/api/collections')
+      const data = await response.json()
+
+      setCollections(data)
+    }
+
+    loadCollections()
+  }, [])
   // state for image search and Pixabay results
   const [searchTerm, setSearchTerm] = useState('')
   const [images, setImages] = useState<any[]>([])
@@ -25,19 +37,25 @@ function App() {
     setImages(data.hits)
   }
 
-  // create new empty collection
-  const createCollection = () => {
+  // Create a collection using the backend API
+  const createCollection = async () => {
     const name = prompt('Enter a name for your collection:')
 
-    if (name) {
-      setCollections([
-        ...collections,
-        {
-          name: name,
-          images: []
-        }
-      ])
+    if (!name) {
+      return
     }
+
+    const response = await fetch('http://localhost:3001/api/collections', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ name })
+    })
+
+    const newCollection = await response.json()
+
+    setCollections([...collections, newCollection])
   }
 
   // save an image to a user-selected collection
@@ -66,10 +84,12 @@ function App() {
 
     setCollections(updatedCollections)
   }
+  
 
   return (
     <div>
       <h1>My Image App</h1>
+      
 
       <div>
         <input
