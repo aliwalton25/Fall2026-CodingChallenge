@@ -49,6 +49,44 @@ app.post('/api/collections', (req, res) => {
   res.status(201).json(newCollection)
 })
 
+// Save an image to a collection
+app.post('/api/collections/:id/images', (req, res) => {
+  const collectionId = Number(req.params.id)
+  const image = req.body
+
+  const collection = collections.find(
+    (collection) => collection.id === collectionId
+  )
+
+  if (!collection) {
+    return res.status(404).json({ error: 'Collection not found' })
+  }
+
+  collection.images.push(image)
+
+  res.status(201).json(collection)
+})
+
+// Remove an image from a collection
+app.delete('/api/collections/:id/images/:imageId', (req, res) => {
+  const collectionId = Number(req.params.id)
+  const imageId = Number(req.params.imageId)
+
+  const collection = collections.find(
+    (collection) => collection.id === collectionId
+  )
+
+  if (!collection) {
+    return res.status(404).json({ error: 'Collection not found' })
+  }
+
+  collection.images = collection.images.filter(
+    (image) => image.id !== imageId
+  )
+
+  res.json(collection)
+})
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
 })

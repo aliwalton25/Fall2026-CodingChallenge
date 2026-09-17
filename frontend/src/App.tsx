@@ -58,8 +58,8 @@ function App() {
     setCollections([...collections, newCollection])
   }
 
-  // save an image to a user-selected collection
-  const saveImage = (image: any) => {
+  // Save an image to a collection using the backend API
+  const saveImage = async (image: any) => {
     if (collections.length === 0) {
       alert('Create a collection first!')
       return
@@ -71,20 +71,62 @@ function App() {
         .join('\n')}`
     )
 
-    const updatedCollections = collections.map((collection) => {
-      if (collection.name === collectionName) {
-        return {
-          ...collection,
-          images: [...collection.images, image]
-        }
+    const collection = collections.find(
+      (collection) => collection.name === collectionName
+    )
+
+    if (!collection) {
+      alert('Collection not found.')
+      return
+    }
+
+    const response = await fetch(
+      `http://localhost:3001/api/collections/${collection.id}/images`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(image)
       }
+    )
 
-      return collection
-    })
+    const updatedCollection = await response.json()
 
-    setCollections(updatedCollections)
+    setCollections(
+      collections.map((currentCollection) =>
+        currentCollection.id === updatedCollection.id
+          ? updatedCollection
+          : currentCollection
+      )
+    )
+
+    alert(`Image saved to ${collection.name}!`)
   }
   
+  // Remove a saved image from a collection
+  const removeImage = async (collectionId: number, imageId: number) => {
+    console.log('Removing image:', collectionId, imageId)
+    
+    const response = await fetch(
+      `http://localhost:3001/api/collections/${collectionId}/images/${imageId}`,
+      {
+        method: 'DELETE'
+      }
+    )
+
+    const updatedCollection = await response.json()
+
+    setCollections(
+      collections.map((collection) =>
+        collection.id === updatedCollection.id
+          ? updatedCollection
+          : collection
+      )
+    )
+
+    setSelectedCollection(updatedCollection)
+  }
 
   return (
     <div>
@@ -154,6 +196,13 @@ function App() {
                   alt={image.tags}
                 />
                 <p>{image.tags}</p>
+
+                <button
+                  onClick={() => removeImage(selectedCollection.id, image.id)}
+                >
+                  Remove
+                </button>
+
               </div>
             ))}
           </div>
