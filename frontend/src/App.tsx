@@ -2,16 +2,17 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   BookmarkPlus,
+  Check,
   FolderPlus,
   Globe2,
+  Image as ImageIcon,
   Lock,
+  Pencil,
   Search,
   Share2,
   Sparkles,
   Trash2,
-  Pencil,
-  X,
-  Image as ImageIcon
+  X
 } from 'lucide-react'
 import './App.css'
 
@@ -47,12 +48,24 @@ function App() {
   const [error, setError] = useState('')
   const [sharedMode, setSharedMode] = useState(false)
 
+  // Modal state
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newCollectionName, setNewCollectionName] = useState('')
+
+  const [imageToSave, setImageToSave] =
+    useState<PixabayImage | null>(null)
+
+  const [imageToEdit, setImageToEdit] =
+    useState<PixabayImage | null>(null)
+
+  const [editDescription, setEditDescription] = useState('')
+
   const selectedCollection =
     collections.find(
       (collection) => collection.id === selectedCollectionId
     ) ?? null
 
-  // Load collections or a shared public collection when the app starts
+  // Load normal collections or a public shared collection
   useEffect(() => {
     const loadApp = async () => {
       try {
@@ -100,13 +113,9 @@ function App() {
     loadApp()
   }, [])
 
-  // Search Pixabay and move the user directly to the results
+  // Search Pixabay and scroll to the results
   const searchImages = async (event?: FormEvent) => {
     event?.preventDefault()
-
-    if (sharedMode) {
-      return
-    }
 
     const search = searchTerm.trim()
 
@@ -140,7 +149,6 @@ function App() {
       const data = await response.json()
       setImages(data.hits ?? [])
 
-      // Wait for React to render the results, then scroll to them
       setTimeout(() => {
         document
           .getElementById('search-results')
@@ -158,7 +166,7 @@ function App() {
     }
   }
 
-  // Replace a collection with its updated backend version
+  // Update one collection in frontend state
   const updateCollection = (updatedCollection: Collection) => {
     setCollections((currentCollections) =>
       currentCollections.map((collection) =>
@@ -169,90 +177,20 @@ function App() {
     )
   }
 
-  // Create a collection
-  const createCollection = async () => {
-    const enteredName = prompt(
-      'Enter a name for your new collection:'
+  // Send an image to an existing collection
+  const saveImageToCollection = async (
+    collection: Collection,
+    image: PixabayImage
+  ) => {
+    const alreadySaved = collection.images.some(
+      (savedImage) => savedImage.id === image.id
     )
 
-    if (!enteredName?.trim()) {
-      return
-    }
-
-    const name = enteredName.trim()
-
-    if (
-      collections.some(
-        (collection) =>
-          collection.name.toLowerCase() === name.toLowerCase()
+    if (alreadySaved) {
+      setError(
+        `That image is already saved in ${collection.name}.`
       )
-    ) {
-      alert('You already have a collection with that name.')
-      return
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/collections`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ name })
-      })
-
-      if (!response.ok) {
-        throw new Error('Could not create collection.')
-      }
-
-      const newCollection: Collection = await response.json()
-
-      setCollections((currentCollections) => [
-        ...currentCollections,
-        newCollection
-      ])
-    } catch (err) {
-      console.error(err)
-      setError('Could not create the collection.')
-    }
-  }
-
-  // Save an image to a collection
-  const saveImage = async (image: PixabayImage) => {
-    if (collections.length === 0) {
-      alert('Create a collection first!')
-      return
-    }
-
-    const choices = collections
-      .map((collection) => collection.name)
-      .join('\n')
-
-    const enteredName = prompt(
-      `Save to which collection?\n\n${choices}`
-    )
-
-    if (!enteredName) {
-      return
-    }
-
-    const collection = collections.find(
-      (currentCollection) =>
-        currentCollection.name.toLowerCase() ===
-        enteredName.trim().toLowerCase()
-    )
-
-    if (!collection) {
-      alert('Collection not found.')
-      return
-    }
-
-    if (
-      collection.images.some(
-        (savedImage) => savedImage.id === image.id
-      )
-    ) {
-      alert('That image is already saved there.')
-      return
+      return false
     }
 
     try {
@@ -276,37 +214,158 @@ function App() {
 
       updateCollection(updatedCollection)
 
-      alert(`Saved to ${collection.name}!`)
+      return true
     } catch (err) {
       console.error(err)
       setError('Could not save the image.')
+      return false
     }
   }
 
-  // Edit a saved image description
-  const editImage = async (
-    collectionId: number,
-    image: PixabayImage
+  // Create a collection. If an image was waiting to be saved,
+  // automatically save it into the new collection.
+  const createCollection = async (event?: FormEvent) => {
+    event?.preventDefault()
+
+    const name = newCollectionName.trim()
+
+    if (!name) {
+      return
+    }
+
+    if (
+      collections.some(
+        (collection) =>
+          collection.name.toLowerCase() === name.toLowerCase()
+      )
+    ) {
+      setError('You already have a collection with that name.')
+      return
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/collections`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name })
+      })
+
+      if (!response.ok) {
+        throw new Error('Could not create collection.')
+      }
+
+      const newCollection: Collection = await response.json()
+
+      setCollections((currentCollections) => [
+        ...currentCollections,
+        newCollection
+      ])
+
+      // Preserve the image that caused the Create Collection flow.
+      const pendingImage = imageToSave
+
+      if (pendingImage) {
+        const saveResponse = await fetch(
+          `${API_URL}/collections/${newCollection.id}/images`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(pendingImage)
+          }
+        )
+
+        if (!saveResponse.ok) {
+          throw new Error(
+            'Collection was created, but the image could not be saved.'
+          )
+        }
+
+        const updatedCollection: Collection =
+          await saveResponse.json()
+
+        setCollections((currentCollections) =>
+          currentCollections.map((collection) =>
+            collection.id === updatedCollection.id
+              ? updatedCollection
+              : collection
+          )
+        )
+      }
+
+      setNewCollectionName('')
+      setShowCreateModal(false)
+      setImageToSave(null)
+    } catch (err) {
+      console.error(err)
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not create the collection.'
+      )
+    }
+  }
+
+  // Open the visual collection picker
+  const openSavePicker = (image: PixabayImage) => {
+    setImageToSave(image)
+
+    if (collections.length === 0) {
+      setShowCreateModal(true)
+    }
+  }
+
+  // Save from the collection picker
+  const chooseCollectionForImage = async (
+    collection: Collection
   ) => {
-    const description = prompt(
-      'Edit this image description:',
-      image.tags
+    if (!imageToSave) {
+      return
+    }
+
+    const saved = await saveImageToCollection(
+      collection,
+      imageToSave
     )
 
-    if (!description?.trim()) {
+    if (saved) {
+      setImageToSave(null)
+    }
+  }
+
+  const openEditModal = (image: PixabayImage) => {
+    setImageToEdit(image)
+    setEditDescription(image.tags)
+  }
+
+  // Edit a saved image description
+  const saveEditedDescription = async (
+    event?: FormEvent
+  ) => {
+    event?.preventDefault()
+
+    if (
+      !selectedCollection ||
+      !imageToEdit ||
+      !editDescription.trim()
+    ) {
       return
     }
 
     try {
       const response = await fetch(
-        `${API_URL}/collections/${collectionId}/images/${image.id}`,
+        `${API_URL}/collections/${selectedCollection.id}/images/${imageToEdit.id}`,
         {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            tags: description.trim()
+            tags: editDescription.trim()
           })
         }
       )
@@ -319,13 +378,15 @@ function App() {
         await response.json()
 
       updateCollection(updatedCollection)
+      setImageToEdit(null)
+      setEditDescription('')
     } catch (err) {
       console.error(err)
       setError('Could not edit the image.')
     }
   }
 
-  // Remove a saved image
+  // Remove an image from a collection
   const removeImage = async (
     collectionId: number,
     imageId: number
@@ -356,7 +417,7 @@ function App() {
     }
   }
 
-  // Toggle a collection between private and public
+  // Toggle public/private status
   const togglePrivacy = async (collection: Collection) => {
     try {
       const response = await fetch(
@@ -386,11 +447,11 @@ function App() {
     }
   }
 
-  // Copy a link to a public collection
+  // Copy a public sharing link
   const shareCollection = async (collection: Collection) => {
     if (!collection.isPublic) {
-      alert(
-        'This collection is private. Make it public before sharing.'
+      setError(
+        'Make this collection public before sharing it.'
       )
       return
     }
@@ -400,9 +461,9 @@ function App() {
 
     try {
       await navigator.clipboard.writeText(url)
-      alert('Public collection link copied!')
+      setError('Share link copied to your clipboard.')
     } catch {
-      prompt('Copy this link:', url)
+      setError(`Share link: ${url}`)
     }
   }
 
@@ -411,19 +472,22 @@ function App() {
       <header className="site-header">
         <div className="brand">
           <span className="brand-mark">
-            <Sparkles size={21} strokeWidth={2} />
+            <Sparkles size={20} />
           </span>
 
           <div>
             <h1>Pinspire</h1>
-            <p>Discover it. Save it. Find it again.</p>
+            <p>A place for ideas worth keeping.</p>
           </div>
         </div>
 
         {!sharedMode && (
           <button
             className="primary-button"
-            onClick={createCollection}
+            onClick={() => {
+              setImageToSave(null)
+              setShowCreateModal(true)
+            }}
           >
             <FolderPlus size={17} />
             New Collection
@@ -433,85 +497,117 @@ function App() {
 
       <main>
         {error && (
-          <div className="error-message">
+          <div className="notice-message">
             <span>{error}</span>
 
             <button
-              className="text-button"
               onClick={() => setError('')}
-              aria-label="Dismiss error"
+              aria-label="Dismiss message"
             >
-              <X size={16} />
+              <X size={17} />
             </button>
           </div>
         )}
 
         {sharedMode ? (
-          <section className="hero">
-            <p className="eyebrow">SHARED COLLECTION</p>
+          <section className="hero shared-hero">
+            <div className="hero-content">
+              <p className="hero-kicker">
+                <Globe2 size={14} />
+                SHARED COLLECTION
+              </p>
 
-            <h2>
-              {selectedCollection?.name ?? 'Shared inspiration'}
-            </h2>
+              <h2>{selectedCollection?.name}</h2>
 
-            <p className="hero-description">
-              A public collection of ideas and inspiration.
-            </p>
+              <p className="hero-description">
+                A collection of ideas selected and shared on Pinspire.
+              </p>
 
-            <a
-              className="primary-button home-link"
-              href="/"
-            >
-              <Sparkles size={17} />
-              Explore Pinspire
-            </a>
+              <a className="hero-action" href="/">
+                Explore Pinspire
+              </a>
+            </div>
           </section>
         ) : (
           <section className="hero">
-            <div className="hero-badge">
-              <Sparkles size={14} />
-              DISCOVER · COLLECT · CREATE
-            </div>
+            <div className="hero-accent" />
 
-            <h2>
-              Find inspiration
-              <br />
-              worth keeping.
-            </h2>
+            <div className="hero-content">
+              <p className="hero-kicker">
+                <Sparkles size={14} />
+                YOUR VISUAL LIBRARY
+              </p>
 
-            <p className="hero-description">
-              Discover beautiful ideas, save your favorites, and
-              organize everything into collections that are uniquely
-              yours.
-            </p>
+              <h2>
+                Ideas worth
+                <br />
+                <em>keeping.</em>
+              </h2>
 
-            <form
-              className="search-bar"
-              onSubmit={searchImages}
-            >
-              <Search
-                size={20}
-                className="search-input-icon"
-              />
+              <p className="hero-description">
+                Discover images that spark something, organize them
+                into thoughtful collections, and return whenever you
+                need inspiration.
+              </p>
 
-              <input
-                type="search"
-                placeholder="Search travel, interiors, food, nature..."
-                value={searchTerm}
-                onChange={(event) =>
-                  setSearchTerm(event.target.value)
-                }
-              />
-
-              <button
-                className="primary-button search-button"
-                type="submit"
-                disabled={isSearching}
+              <form
+                className="search-bar"
+                onSubmit={searchImages}
               >
-                <Search size={17} />
-                {isSearching ? 'Searching...' : 'Search'}
-              </button>
-            </form>
+                <Search
+                  size={19}
+                  className="search-input-icon"
+                />
+
+                <input
+                  type="search"
+                  placeholder="Search for inspiration..."
+                  value={searchTerm}
+                  onChange={(event) =>
+                    setSearchTerm(event.target.value)
+                  }
+                />
+
+                <button
+                  type="submit"
+                  disabled={isSearching}
+                >
+                  {isSearching ? 'Searching...' : 'Search'}
+                </button>
+              </form>
+
+              <div className="search-suggestions">
+                <span>Explore</span>
+
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('architecture')}
+                >
+                  Architecture
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('travel')}
+                >
+                  Travel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('interiors')}
+                >
+                  Interiors
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('food')}
+                >
+                  Food
+                </button>
+              </div>
+            </div>
           </section>
         )}
 
@@ -519,17 +615,21 @@ function App() {
           <section className="section">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">YOUR SPACE</p>
-                <h2>My Collections</h2>
+                <p className="eyebrow">COLLECTIONS</p>
+                <h2>Your library</h2>
 
                 <p className="section-subtitle">
-                  Keep the things that inspire you organized.
+                  Organize inspiration into spaces that make sense
+                  to you.
                 </p>
               </div>
 
               <button
                 className="secondary-button"
-                onClick={createCollection}
+                onClick={() => {
+                  setImageToSave(null)
+                  setShowCreateModal(true)
+                }}
               >
                 <FolderPlus size={17} />
                 Create Collection
@@ -539,22 +639,25 @@ function App() {
             {collections.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">
-                  <FolderPlus size={32} />
+                  <FolderPlus size={30} />
                 </div>
 
-                <h3>Your first collection awaits</h3>
+                <h3>Create your first collection</h3>
 
                 <p>
-                  Create a collection and start building your own
-                  visual library.
+                  Start building a library of ideas you want to
+                  revisit.
                 </p>
 
                 <button
                   className="primary-button"
-                  onClick={createCollection}
+                  onClick={() => {
+                    setImageToSave(null)
+                    setShowCreateModal(true)
+                  }}
                 >
                   <FolderPlus size={17} />
-                  Create My First Collection
+                  Create Collection
                 </button>
               </div>
             ) : (
@@ -583,7 +686,7 @@ function App() {
                         />
                       ) : (
                         <div className="collection-placeholder">
-                          <ImageIcon size={38} />
+                          <ImageIcon size={36} />
                         </div>
                       )}
 
@@ -609,12 +712,12 @@ function App() {
                         <p>
                           {collection.images.length}{' '}
                           {collection.images.length === 1
-                            ? 'saved image'
-                            : 'saved images'}
+                            ? 'image'
+                            : 'images'}
                         </p>
                       </div>
 
-                      <span className="arrow">→</span>
+                      <span>↗</span>
                     </div>
                   </article>
                 ))}
@@ -629,7 +732,7 @@ function App() {
               <div>
                 <p className="eyebrow">
                   {sharedMode
-                    ? 'PUBLIC COLLECTION'
+                    ? 'SHARED COLLECTION'
                     : 'OPEN COLLECTION'}
                 </p>
 
@@ -690,13 +793,13 @@ function App() {
             {selectedCollection.images.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">
-                  <ImageIcon size={32} />
+                  <ImageIcon size={30} />
                 </div>
 
-                <h3>This collection is waiting for inspiration</h3>
+                <h3>This collection is empty</h3>
 
                 <p>
-                  Find something you love and save it here.
+                  Find something worth keeping and save it here.
                 </p>
               </div>
             ) : (
@@ -725,18 +828,13 @@ function App() {
                       )}
 
                       {!sharedMode && (
-                        <>
+                        <div className="saved-image-actions">
                           <button
-                            className="secondary-button edit-button"
-                            onClick={() =>
-                              editImage(
-                                selectedCollection.id,
-                                image
-                              )
-                            }
+                            className="secondary-button"
+                            onClick={() => openEditModal(image)}
                           >
-                            <Pencil size={16} />
-                            Edit Description
+                            <Pencil size={15} />
+                            Edit
                           </button>
 
                           <button
@@ -748,10 +846,10 @@ function App() {
                               )
                             }
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={15} />
                             Remove
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   </article>
@@ -773,12 +871,12 @@ function App() {
                 <h2>
                   {hasSearched
                     ? `Results for “${searchTerm}”`
-                    : 'Find Something New'}
+                    : 'Find something new'}
                 </h2>
 
                 <p className="section-subtitle">
-                  Search Pixabay and save anything that catches your
-                  eye.
+                  Search Pixabay and add anything that catches your
+                  attention to your library.
                 </p>
               </div>
 
@@ -792,26 +890,26 @@ function App() {
             {!hasSearched ? (
               <div className="empty-state search-empty-state">
                 <div className="empty-icon">
-                  <Search size={32} />
+                  <Search size={30} />
                 </div>
 
-                <h3>What will inspire you today?</h3>
+                <h3>Start exploring</h3>
 
                 <p>
-                  Try searching for travel, architecture, fashion,
-                  recipes, nature, or anything else you love.
+                  Search for places, spaces, food, art, design, or
+                  anything else that inspires you.
                 </p>
               </div>
             ) : isSearching ? (
               <div className="empty-state">
-                <Sparkles size={28} />
-                <h3>Finding inspiration...</h3>
+                <Sparkles size={27} />
+                <h3>Searching...</h3>
               </div>
             ) : images.length === 0 ? (
               <div className="empty-state">
-                <Search size={28} />
-                <h3>No images found</h3>
-                <p>Try another search term.</p>
+                <Search size={27} />
+                <h3>No results found</h3>
+                <p>Try a different search term.</p>
               </div>
             ) : (
               <div className="image-grid">
@@ -825,6 +923,14 @@ function App() {
                         src={image.webformatURL}
                         alt={image.tags}
                       />
+
+                      <button
+                        className="floating-save-button"
+                        onClick={() => openSavePicker(image)}
+                      >
+                        <BookmarkPlus size={16} />
+                        Save
+                      </button>
                     </div>
 
                     <div className="image-card-content">
@@ -837,14 +943,6 @@ function App() {
                           Photo by {image.user}
                         </p>
                       )}
-
-                      <button
-                        className="save-button"
-                        onClick={() => saveImage(image)}
-                      >
-                        <BookmarkPlus size={17} />
-                        Save to Collection
-                      </button>
                     </div>
                   </article>
                 ))}
@@ -860,8 +958,252 @@ function App() {
           <span>Pinspire</span>
         </div>
 
-        <p>Your ideas, all in one place.</p>
+        <p>Discover. Collect. Return.</p>
       </footer>
+
+      {/* Choose collection modal */}
+      {imageToSave &&
+        collections.length > 0 &&
+        !showCreateModal && (
+          <div
+            className="modal-backdrop"
+            onMouseDown={() => setImageToSave(null)}
+          >
+            <div
+              className="modal"
+              onMouseDown={(event) =>
+                event.stopPropagation()
+              }
+            >
+              <div className="modal-header">
+                <div>
+                  <p className="eyebrow">SAVE IMAGE</p>
+                  <h2>Choose a collection</h2>
+                </div>
+
+                <button
+                  className="modal-close"
+                  onClick={() => setImageToSave(null)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="save-preview">
+                <img
+                  src={imageToSave.webformatURL}
+                  alt={imageToSave.tags}
+                />
+              </div>
+
+              <div className="collection-picker">
+                {collections.map((collection) => {
+                  const alreadySaved =
+                    collection.images.some(
+                      (image) =>
+                        image.id === imageToSave.id
+                    )
+
+                  return (
+                    <button
+                      key={collection.id}
+                      className="collection-choice"
+                      disabled={alreadySaved}
+                      onClick={() =>
+                        chooseCollectionForImage(collection)
+                      }
+                    >
+                      <div className="choice-icon">
+                        {alreadySaved ? (
+                          <Check size={18} />
+                        ) : (
+                          <FolderPlus size={18} />
+                        )}
+                      </div>
+
+                      <div>
+                        <strong>{collection.name}</strong>
+
+                        <span>
+                          {alreadySaved
+                            ? 'Already saved'
+                            : `${collection.images.length} ${
+                                collection.images.length === 1
+                                  ? 'image'
+                                  : 'images'
+                              }`}
+                        </span>
+                      </div>
+
+                      {!alreadySaved && <span>→</span>}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <button
+                className="modal-create-link"
+                onClick={() =>
+                  setShowCreateModal(true)
+                }
+              >
+                <FolderPlus size={16} />
+                Create a new collection
+              </button>
+            </div>
+          </div>
+        )}
+
+      {/* Create collection modal */}
+      {showCreateModal && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={() => {
+            setShowCreateModal(false)
+            setNewCollectionName('')
+
+            // Only clear the pending image if the entire flow
+            // is being cancelled.
+            setImageToSave(null)
+          }}
+        >
+          <div
+            className="modal small-modal"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">NEW COLLECTION</p>
+                <h2>Create a collection</h2>
+              </div>
+
+              <button
+                className="modal-close"
+                onClick={() => {
+                  setShowCreateModal(false)
+                  setNewCollectionName('')
+                  setImageToSave(null)
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {imageToSave && (
+              <div className="pending-save-note">
+                <BookmarkPlus size={17} />
+
+                <span>
+                  This image will be saved automatically
+                  after you create the collection.
+                </span>
+              </div>
+            )}
+
+            <form onSubmit={createCollection}>
+              <label className="field-label">
+                Collection name
+              </label>
+
+              <input
+                className="modal-input"
+                autoFocus
+                placeholder="e.g. Weekend escapes"
+                value={newCollectionName}
+                onChange={(event) =>
+                  setNewCollectionName(event.target.value)
+                }
+              />
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    setShowCreateModal(false)
+                    setNewCollectionName('')
+                    setImageToSave(null)
+                  }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  className="primary-button"
+                  type="submit"
+                >
+                  <FolderPlus size={16} />
+                  Create Collection
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit image modal */}
+      {imageToEdit && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={() => setImageToEdit(null)}
+        >
+          <div
+            className="modal small-modal"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="modal-header">
+              <div>
+                <p className="eyebrow">EDIT IMAGE</p>
+                <h2>Edit description</h2>
+              </div>
+
+              <button
+                className="modal-close"
+                onClick={() => setImageToEdit(null)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={saveEditedDescription}>
+              <label className="field-label">
+                Description
+              </label>
+
+              <textarea
+                className="modal-input modal-textarea"
+                autoFocus
+                value={editDescription}
+                onChange={(event) =>
+                  setEditDescription(event.target.value)
+                }
+              />
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setImageToEdit(null)}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  className="primary-button"
+                  type="submit"
+                >
+                  <Check size={16} />
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
