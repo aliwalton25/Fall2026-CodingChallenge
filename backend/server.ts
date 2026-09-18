@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import fs from 'fs'
 
 const app = express()
 const PORT = 3001
@@ -11,8 +12,23 @@ interface Collection {
   images: any[]
 }
 
-// Temporary storage for collections
+// Load saved collections from the data file
+const dataFile = './data.json'
+
 let collections: Collection[] = []
+
+if (fs.existsSync(dataFile)) {
+  const savedData = fs.readFileSync(dataFile, 'utf-8')
+  collections = JSON.parse(savedData)
+}
+
+// Save the current collections to the data file
+const saveCollections = () => {
+  fs.writeFileSync(
+    dataFile,
+    JSON.stringify(collections, null, 2)
+  )
+}
 
 // Allow the frontend to communicate with this server
 app.use(cors())
@@ -64,6 +80,8 @@ app.post('/api/collections/:id/images', (req, res) => {
 
   collection.images.push(image)
 
+  saveCollections()
+
   res.status(201).json(collection)
 })
 
@@ -83,6 +101,8 @@ app.delete('/api/collections/:id/images/:imageId', (req, res) => {
   collection.images = collection.images.filter(
     (image) => image.id !== imageId
   )
+
+  saveCollections()
 
   res.json(collection)
 })
