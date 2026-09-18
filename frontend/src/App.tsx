@@ -1,5 +1,18 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+import {
+  BookmarkPlus,
+  FolderPlus,
+  Globe2,
+  Lock,
+  Search,
+  Share2,
+  Sparkles,
+  Trash2,
+  Pencil,
+  X,
+  Image as ImageIcon
+} from 'lucide-react'
 import './App.css'
 
 const API_URL = 'http://localhost:3001/api'
@@ -39,7 +52,7 @@ function App() {
       (collection) => collection.id === selectedCollectionId
     ) ?? null
 
-  // Load normal collections or a public shared collection
+  // Load collections or a shared public collection when the app starts
   useEffect(() => {
     const loadApp = async () => {
       try {
@@ -62,7 +75,6 @@ function App() {
           setCollections([collection])
           setSelectedCollectionId(collection.id)
           setSharedMode(true)
-
           return
         }
 
@@ -88,6 +100,7 @@ function App() {
     loadApp()
   }, [])
 
+  // Search Pixabay for images
   const searchImages = async (event?: FormEvent) => {
     event?.preventDefault()
 
@@ -125,7 +138,6 @@ function App() {
       }
 
       const data = await response.json()
-
       setImages(data.hits ?? [])
     } catch (err) {
       console.error(err)
@@ -136,6 +148,7 @@ function App() {
     }
   }
 
+  // Replace a collection with its updated backend version
   const updateCollection = (updatedCollection: Collection) => {
     setCollections((currentCollections) =>
       currentCollections.map((collection) =>
@@ -146,6 +159,7 @@ function App() {
     )
   }
 
+  // Create a collection
   const createCollection = async () => {
     const enteredName = prompt(
       'Enter a name for your new collection:'
@@ -192,6 +206,7 @@ function App() {
     }
   }
 
+  // Save an image to a collection
   const saveImage = async (image: PixabayImage) => {
     if (collections.length === 0) {
       alert('Create a collection first!')
@@ -258,6 +273,7 @@ function App() {
     }
   }
 
+  // Edit a saved image description
   const editImage = async (
     collectionId: number,
     image: PixabayImage
@@ -299,6 +315,7 @@ function App() {
     }
   }
 
+  // Remove a saved image
   const removeImage = async (
     collectionId: number,
     imageId: number
@@ -329,6 +346,7 @@ function App() {
     }
   }
 
+  // Toggle a collection between private and public
   const togglePrivacy = async (collection: Collection) => {
     try {
       const response = await fetch(
@@ -358,6 +376,7 @@ function App() {
     }
   }
 
+  // Copy a link to a public collection
   const shareCollection = async (collection: Collection) => {
     if (!collection.isPublic) {
       alert(
@@ -381,7 +400,9 @@ function App() {
     <div className="app">
       <header className="site-header">
         <div className="brand">
-          <span className="brand-mark">✦</span>
+          <span className="brand-mark">
+            <Sparkles size={21} strokeWidth={2} />
+          </span>
 
           <div>
             <h1>Pinspire</h1>
@@ -394,7 +415,8 @@ function App() {
             className="primary-button"
             onClick={createCollection}
           >
-            + New Collection
+            <FolderPlus size={17} />
+            New Collection
           </button>
         )}
       </header>
@@ -407,8 +429,9 @@ function App() {
             <button
               className="text-button"
               onClick={() => setError('')}
+              aria-label="Dismiss error"
             >
-              Dismiss
+              <X size={16} />
             </button>
           </div>
         )}
@@ -422,34 +445,45 @@ function App() {
             </h2>
 
             <p className="hero-description">
-              A public Pinspire collection shared with you.
+              A public collection of ideas and inspiration.
             </p>
 
             <a
               className="primary-button home-link"
               href="/"
             >
+              <Sparkles size={17} />
               Explore Pinspire
             </a>
           </section>
         ) : (
           <section className="hero">
-            <p className="eyebrow">YOUR VISUAL LIBRARY</p>
+            <div className="hero-badge">
+              <Sparkles size={14} />
+              DISCOVER · COLLECT · CREATE
+            </div>
 
-            <h2>Find inspiration worth keeping.</h2>
+            <h2>
+              Find inspiration
+              <br />
+              worth keeping.
+            </h2>
 
             <p className="hero-description">
-              Search for images, organize your favorites into
-              collections, and keep everything you love in one place.
+              Discover beautiful ideas, save your favorites, and
+              organize everything into collections that are uniquely
+              yours.
             </p>
 
             <form
               className="search-bar"
               onSubmit={searchImages}
             >
+              <Search size={20} className="search-input-icon" />
+
               <input
                 type="search"
-                placeholder="Try “travel”, “architecture”, or “recipes”..."
+                placeholder="Search travel, interiors, food, nature..."
                 value={searchTerm}
                 onChange={(event) =>
                   setSearchTerm(event.target.value)
@@ -461,6 +495,7 @@ function App() {
                 type="submit"
                 disabled={isSearching}
               >
+                <Search size={17} />
                 {isSearching ? 'Searching...' : 'Search'}
               </button>
             </form>
@@ -471,33 +506,40 @@ function App() {
           <section className="section">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">COLLECTIONS</p>
+                <p className="eyebrow">YOUR SPACE</p>
                 <h2>My Collections</h2>
+                <p className="section-subtitle">
+                  Keep the things that inspire you organized.
+                </p>
               </div>
 
               <button
                 className="secondary-button"
                 onClick={createCollection}
               >
-                + Create Collection
+                <FolderPlus size={17} />
+                Create Collection
               </button>
             </div>
 
             {collections.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">♡</div>
+                <div className="empty-icon">
+                  <FolderPlus size={32} />
+                </div>
 
-                <h3>No collections yet</h3>
+                <h3>Your first collection awaits</h3>
 
                 <p>
-                  Create your first collection and start saving
-                  inspiration.
+                  Create a collection and start building your own
+                  visual library.
                 </p>
 
                 <button
                   className="primary-button"
                   onClick={createCollection}
                 >
+                  <FolderPlus size={17} />
                   Create My First Collection
                 </button>
               </div>
@@ -527,9 +569,23 @@ function App() {
                         />
                       ) : (
                         <div className="collection-placeholder">
-                          ♡
+                          <ImageIcon size={38} />
                         </div>
                       )}
+
+                      <div className="privacy-badge">
+                        {collection.isPublic ? (
+                          <>
+                            <Globe2 size={12} />
+                            Public
+                          </>
+                        ) : (
+                          <>
+                            <Lock size={12} />
+                            Private
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     <div className="collection-info">
@@ -539,12 +595,8 @@ function App() {
                         <p>
                           {collection.images.length}{' '}
                           {collection.images.length === 1
-                            ? 'image'
-                            : 'images'}
-                          {' · '}
-                          {collection.isPublic
-                            ? 'Public'
-                            : 'Private'}
+                            ? 'saved image'
+                            : 'saved images'}
                         </p>
                       </div>
 
@@ -569,7 +621,7 @@ function App() {
 
                 <h2>{selectedCollection.name}</h2>
 
-                <p className="muted-text">
+                <p className="section-subtitle">
                   {selectedCollection.images.length}{' '}
                   {selectedCollection.images.length === 1
                     ? 'saved image'
@@ -585,9 +637,17 @@ function App() {
                       togglePrivacy(selectedCollection)
                     }
                   >
-                    {selectedCollection.isPublic
-                      ? 'Make Private'
-                      : 'Make Public'}
+                    {selectedCollection.isPublic ? (
+                      <>
+                        <Lock size={16} />
+                        Make Private
+                      </>
+                    ) : (
+                      <>
+                        <Globe2 size={16} />
+                        Make Public
+                      </>
+                    )}
                   </button>
 
                   <button
@@ -596,6 +656,7 @@ function App() {
                       shareCollection(selectedCollection)
                     }
                   >
+                    <Share2 size={16} />
                     Share
                   </button>
 
@@ -605,6 +666,7 @@ function App() {
                       setSelectedCollectionId(null)
                     }
                   >
+                    <X size={16} />
                     Close
                   </button>
                 </div>
@@ -613,8 +675,15 @@ function App() {
 
             {selectedCollection.images.length === 0 ? (
               <div className="empty-state">
-                <h3>This collection is empty</h3>
-                <p>There aren't any saved images here yet.</p>
+                <div className="empty-icon">
+                  <ImageIcon size={32} />
+                </div>
+
+                <h3>This collection is waiting for inspiration</h3>
+
+                <p>
+                  Find something you love and save it here.
+                </p>
               </div>
             ) : (
               <div className="image-grid">
@@ -652,6 +721,7 @@ function App() {
                               )
                             }
                           >
+                            <Pencil size={16} />
                             Edit Description
                           </button>
 
@@ -664,6 +734,7 @@ function App() {
                               )
                             }
                           >
+                            <Trash2 size={16} />
                             Remove
                           </button>
                         </>
@@ -687,27 +758,43 @@ function App() {
                     ? `Results for “${searchTerm}”`
                     : 'Find Something New'}
                 </h2>
+
+                <p className="section-subtitle">
+                  Search Pixabay and save anything that catches your
+                  eye.
+                </p>
               </div>
+
+              {images.length > 0 && (
+                <span className="result-count">
+                  {images.length} results
+                </span>
+              )}
             </div>
 
             {!hasSearched ? (
               <div className="empty-state search-empty-state">
-                <div className="empty-icon">⌕</div>
+                <div className="empty-icon">
+                  <Search size={32} />
+                </div>
 
-                <h3>Start exploring</h3>
+                <h3>What will inspire you today?</h3>
 
                 <p>
-                  Search above to discover images worth keeping.
+                  Try searching for travel, architecture, fashion,
+                  recipes, nature, or anything else you love.
                 </p>
               </div>
             ) : isSearching ? (
               <div className="empty-state">
-                <h3>Searching...</h3>
+                <Sparkles size={28} />
+                <h3>Finding inspiration...</h3>
               </div>
             ) : images.length === 0 ? (
               <div className="empty-state">
+                <Search size={28} />
                 <h3>No images found</h3>
-                <p>Try a different search.</p>
+                <p>Try another search term.</p>
               </div>
             ) : (
               <div className="image-grid">
@@ -738,7 +825,8 @@ function App() {
                         className="save-button"
                         onClick={() => saveImage(image)}
                       >
-                        + Save to Collection
+                        <BookmarkPlus size={17} />
+                        Save to Collection
                       </button>
                     </div>
                   </article>
@@ -750,7 +838,12 @@ function App() {
       </main>
 
       <footer>
-        <p>Pinspire · Your ideas, all in one place.</p>
+        <div className="footer-brand">
+          <Sparkles size={15} />
+          <span>Pinspire</span>
+        </div>
+
+        <p>Your ideas, all in one place.</p>
       </footer>
     </div>
   )
