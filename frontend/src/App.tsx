@@ -100,7 +100,7 @@ function App() {
     loadApp()
   }, [])
 
-  // Search Pixabay for images
+  // Search Pixabay and move the user directly to the results
   const searchImages = async (event?: FormEvent) => {
     event?.preventDefault()
 
@@ -139,6 +139,16 @@ function App() {
 
       const data = await response.json()
       setImages(data.hits ?? [])
+
+      // Wait for React to render the results, then scroll to them
+      setTimeout(() => {
+        document
+          .getElementById('search-results')
+          ?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          })
+      }, 100)
     } catch (err) {
       console.error(err)
       setImages([])
@@ -479,7 +489,10 @@ function App() {
               className="search-bar"
               onSubmit={searchImages}
             >
-              <Search size={20} className="search-input-icon" />
+              <Search
+                size={20}
+                className="search-input-icon"
+              />
 
               <input
                 type="search"
@@ -508,6 +521,7 @@ function App() {
               <div>
                 <p className="eyebrow">YOUR SPACE</p>
                 <h2>My Collections</h2>
+
                 <p className="section-subtitle">
                   Keep the things that inspire you organized.
                 </p>
@@ -748,7 +762,10 @@ function App() {
         )}
 
         {!sharedMode && (
-          <section className="section">
+          <section
+            className="section"
+            id="search-results"
+          >
             <div className="section-heading">
               <div>
                 <p className="eyebrow">DISCOVER</p>
